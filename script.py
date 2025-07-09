@@ -64,7 +64,7 @@ class VideoFaceLandmarksTracker:
                     f"y colócalo en {self.MODEL_PATH}"
                 )
     
-    def _extract_landmarks_from_frame(self, frame: np.ndarray) -> List[Tuple[float, float]]:
+    def _extract_landmarks_from_frame(self, frame: np.ndarray) -> Dict:
         """
         Extrae landmarks de un frame específico.
         
@@ -72,7 +72,7 @@ class VideoFaceLandmarksTracker:
             frame: Frame del video como numpy array
             
         Returns:
-            Lista de tuplas (x, y) con las posiciones de landmarks
+            Diccionario con landmarks numerados del 1 al 468
         """
         # Convertir frame a formato RGB para MediaPipe
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -84,21 +84,22 @@ class VideoFaceLandmarksTracker:
         detection_result = self.detector.detect(mp_image)
         
         if len(detection_result.face_landmarks) == 0:
-            return []
+            return {}
         
         # Obtener landmarks del primer rostro
         landmarks = detection_result.face_landmarks[0]
         
         # Convertir a coordenadas de imagen
         h, w = frame.shape[:2]
-        landmark_points = []
+        landmarks_dict = {}
         
-        for landmark in landmarks:
+        # Crear diccionario con landmarks numerados del 1 al 468
+        for i, landmark in enumerate(landmarks):
             x = landmark.x * w
             y = landmark.y * h
-            landmark_points.append((x, y))
+            landmarks_dict[str(i + 1)] = [x, y]
             
-        return landmark_points
+        return landmarks_dict
     
     def process_video(self, video_path: str, output_json: str = None) -> Dict:
         """
@@ -143,22 +144,8 @@ class VideoFaceLandmarksTracker:
             landmarks = self._extract_landmarks_from_frame(frame)
             
             # Guardar landmarks en el diccionario
-            frame_key = f"frame_{frame_count:06d}"
-            
-            if landmarks:
-                self.landmarks_data[frame_key] = {
-                    "frame_number": frame_count,
-                    "timestamp": frame_count / fps,
-                    "landmarks": landmarks,
-                    "num_landmarks": len(landmarks)
-                }
-            else:
-                self.landmarks_data[frame_key] = {
-                    "frame_number": frame_count,
-                    "timestamp": frame_count / fps,
-                    "landmarks": [],
-                    "num_landmarks": 0
-                }
+            frame_key = f"frame{frame_count}"
+            self.landmarks_data[frame_key] = landmarks
             
             # Mostrar progreso
             if frame_count % 30 == 0:
@@ -166,28 +153,13 @@ class VideoFaceLandmarksTracker:
                 print(f"Progreso: {progress:.1f}% ({frame_count}/{total_frames})")
         
         cap.release()
-        
         print(f"Procesamiento completado. {frame_count} frames procesados.")
-        
-        # Agregar metadata
-        metadata = {
-            "video_path": video_path,
-            "total_frames": frame_count,
-            "fps": fps,
-            "duration_seconds": frame_count / fps,
-            "frames_with_face": sum(1 for data in self.landmarks_data.values() if data["num_landmarks"] > 0)
-        }
-        
-        result = {
-            "metadata": metadata,
-            "frames": self.landmarks_data
-        }
         
         # Guardar en JSON si se especifica
         if output_json:
-            self.save_to_json(result, output_json)
+            self.save_to_json(self.landmarks_data, output_json)
         
-        return result
+        return self.landmarks_data
     
     def save_to_json(self, data: Dict, output_path: str):
         """
@@ -203,58 +175,6 @@ class VideoFaceLandmarksTracker:
             print(f"Datos guardados en: {output_path}")
         except Exception as e:
             print(f"Error al guardar JSON: {e}")
-    
-    def load_from_json(self, json_path: str) -> Dict:
-        """
-        Carga datos de landmarks desde un archivo JSON.
-        
-        Args:
-            json_path: Ruta al archivo JSON
-            
-        Returns:
-            Diccionario con los datos cargados
-        """
-        try:
-            with open(json_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"Error al cargar JSON: {e}")
-            return {}
-    
-    def get_frame_landmarks(self, frame_number: int) -> List[Tuple[float, float]]:
-        """
-        Obtiene landmarks de un frame específico.
-        
-        Args:
-            frame_number: Número del frame
-            
-        Returns:
-            Lista de landmarks del frame
-        """
-        frame_key = f"frame_{frame_number:06d}"
-        if frame_key in self.landmarks_data:
-            return self.landmarks_data[frame_key]["landmarks"]
-        return []
-    
-    def get_statistics(self) -> Dict:
-        """
-        Obtiene estadísticas del procesamiento.
-        
-        Returns:
-            Diccionario con estadísticas
-        """
-        if not self.landmarks_data:
-            return {}
-        
-        frames_with_face = sum(1 for data in self.landmarks_data.values() if data["num_landmarks"] > 0)
-        total_frames = len(self.landmarks_data)
-        
-        return {
-            "total_frames": total_frames,
-            "frames_with_face": frames_with_face,
-            "detection_rate": frames_with_face / total_frames if total_frames > 0 else 0,
-            "average_landmarks_per_frame": sum(data["num_landmarks"] for data in self.landmarks_data.values()) / total_frames if total_frames > 0 else 0
-        }
 
 
 def main():
@@ -263,7 +183,7 @@ def main():
     """
     # Configurar rutas - video fijo en ./video.mp4
     video_path = "./video.mp4"
-    output_json = "video_landmarks.json"  # Nombre fijo para el output
+    output_json = "video_landmarks.json"
     
     print(f"🎬 Procesando video: {video_path}")
     print(f"📄 Archivo de salida: {output_json}")
@@ -284,27 +204,22 @@ def main():
         print("📊 Procesando video...")
         result = tracker.process_video(video_path, output_json)
         
-        # Mostrar estadísticas
-        stats = tracker.get_statistics()
+        # Mostrar estadísticas básicas
+        total_frames = len(result)
+        frames_with_face = sum(1 for frame_data in result.values() if frame_data)
+        
         print("\n" + "="*50)
         print("📈 ESTADÍSTICAS FINALES")
         print("="*50)
-        print(f"📹 Total de frames: {stats['total_frames']}")
-        print(f"👤 Frames con rostro detectado: {stats['frames_with_face']}")
-        print(f"🎯 Tasa de detección: {stats['detection_rate']:.2%}")
-        print(f"📍 Promedio de landmarks por frame: {stats['average_landmarks_per_frame']:.1f}")
-        print(f"⏱️  Duración del video: {result['metadata']['duration_seconds']:.2f} segundos")
-        print(f"🎬 FPS del video: {result['metadata']['fps']:.2f}")
+        print(f"📹 Total de frames: {total_frames}")
+        print(f"👤 Frames con rostro detectado: {frames_with_face}")
+        print(f"🎯 Tasa de detección: {frames_with_face/total_frames:.2%}")
         print("-" * 50)
         print(f"✅ Archivo JSON guardado en: {output_json}")
         print("🎉 ¡Procesamiento completado exitosamente!")
         
     except Exception as e:
         print(f"❌ Error: {e}")
-        print("💡 Verifica que:")
-        print("   - El archivo 'video.mp4' existe en el directorio actual")
-        print("   - El archivo no está corrupto")
-        print("   - Tienes permisos de lectura en el archivo")
 
 
 if __name__ == "__main__":

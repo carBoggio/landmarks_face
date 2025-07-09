@@ -1,4 +1,4 @@
-.venv/
+venv/
 __pycache__/
 *.pyc
 *.pyo
@@ -9,4 +9,4 @@ __pycache__/
 *.pyzw
 *.pyzwz
 
-video_landmarks.json
+*.json
