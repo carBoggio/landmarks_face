@@ -143,7 +143,7 @@ venv\Scripts\activate.bat
 
 # 3. Instalar dependencias
 pip install --upgrade pip
-pip install opencv-python mediapipe requests numpy Pillow
+pip install -r requirements.txt
 
 # 4. Ejecutar tracker
 python face_landmarks_tracker.py
@@ -162,7 +162,7 @@ venv\Scripts\Activate.ps1
 
 # 3. Instalar dependencias
 pip install --upgrade pip
-pip install opencv-python mediapipe requests numpy Pillow
+pip install -r requirements.txt
 
 # 4. Ejecutar tracker
 python face_landmarks_tracker.py
@@ -181,7 +181,7 @@ source venv/bin/activate
 
 # 3. Instalar dependencias
 pip install --upgrade pip
-pip install opencv-python mediapipe requests numpy Pillow
+pip install -r requirements.txt
 
 # 4. Ejecutar tracker
 python face_landmarks_tracker.py
